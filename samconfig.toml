@@ -1,0 +1,26 @@
+# samconfig.toml
+# Configuration for AWS SAM CLI
+# Do NOT commit sensitive data here
+
+version = 0.1
+
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "imdb-etl-stack"
+region = "us-east-1"
+
+# Automatically find or create an S3 bucket
+resolve_s3 = true
+
+# Required to allow SAM to create IAM roles
+capabilities = "CAPABILITY_IAM"
+
+# Ask for confirmation before applying the changes
+confirm_changeset = false
+
+# Do not roll back if deploy fails (helps with debugging)
+disable_rollback = true
+
+# No image repositories used in this project
+image_repositories = []

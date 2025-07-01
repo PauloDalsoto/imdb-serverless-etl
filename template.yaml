@@ -1,0 +1,148 @@
+# template.yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  imdb-serverless-etl
+
+  Serverless data pipeline for IMDb movie data enrichment, demonstrating
+  the Bronze Layer Architecture. Permissions are granted to read the OMDb API Key
+  from a manually managed Secrets Manager secret.
+
+Resources:
+  # SQS Queue: Queue to decouple Lambda functions
+  ImdbMovieQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: imdb-movie-queue
+      VisibilityTimeout: 60
+      MessageRetentionPeriod: 86400
+      ReceiveMessageWaitTimeSeconds: 5
+
+  # S3 Bucket: To store data
+  EnrichedDataS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "imdb-etl-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # IAM Role for Lambda Function 1 (GetMoviesAndSendToQueueFunction)
+  GetMoviesAndSendToQueueLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SQSWritePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt ImdbMovieQueue.Arn
+
+  # Lambda Function 1: GetMoviesAndSendToQueueFunction
+  GetMoviesAndSendToQueueFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetMoviesAndSendToQueue
+      Handler: fetch_top_movies.lambda_handler
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 128
+      CodeUri: src/
+      Environment:
+        Variables:
+          SQS_QUEUE_URL: !Ref ImdbMovieQueue
+          IMDB_DATA_URL: https://top-movies.s3.eu-central-1.amazonaws.com/Top250Movies.json
+          MAX_RETRIES: "3"
+          BASE_DELAY_SECONDS: "1"
+      Role: !GetAtt GetMoviesAndSendToQueueLambdaRole.Arn
+      Events:
+        DailyScheduler:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 3 * * ? *)
+            Enabled: true
+            Input: '{"top_n": 10, "batch_size": 1}'
+
+  # IAM Role for Lambda Function 2 (EnrichAndStoreMovieFunction)
+  EnrichAndStoreMovieLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3WriteAndSQSReadPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Join ['', ['arn:aws:s3:::', !Ref EnrichedDataS3Bucket, '/*']]
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt ImdbMovieQueue.Arn
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/imdb-etl/omdb-api-key-*"
+
+  # Lambda Function 2: EnrichAndStoreMovieFunction
+  EnrichAndStoreMovieFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: EnrichAndStoreMovie
+      Handler: enrich_movie.lambda_handler
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 128
+      CodeUri: src/
+      Environment:
+        Variables:
+          OMDB_API_SECRET_NAME: /imdb-etl/omdb-api-key 
+          TARGET_S3_BUCKET: !Ref EnrichedDataS3Bucket 
+          OMDB_URL: https://www.omdbapi.com/
+          MAX_RETRIES: "3"
+          BASE_DELAY_SECONDS: "1"
+      Role: !GetAtt EnrichAndStoreMovieLambdaRole.Arn
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ImdbMovieQueue.Arn
+            BatchSize: 1
+
+Outputs:
+  ImdbMovieQueueUrl:
+    Description: "URL of the SQS Queue"
+    Value: !Ref ImdbMovieQueue
+  EnrichedDataS3BucketName:
+    Description: "Name of the S3 Bucket for enriched data (Bronze Layer)"
+    Value: !Ref EnrichedDataS3Bucket
+  GetMoviesAndSendToQueueFunctionArn:
+    Description: "ARN of the GetMoviesAndSendToQueue Lambda Function"
+    Value: !GetAtt GetMoviesAndSendToQueueFunction.Arn
+  EnrichAndStoreMovieFunctionArn:
+    Description: "ARN of the EnrichAndStoreMovie Lambda Function"
+    Value: !GetAtt EnrichAndStoreMovieFunction.Arn
