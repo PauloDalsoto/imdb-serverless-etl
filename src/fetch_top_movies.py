@@ -4,6 +4,7 @@ import requests
 import boto3
 import logging
 from utils import build_response, with_retries
+import uuid
 
 # Logger setup
 logger = logging.getLogger()
@@ -55,15 +56,20 @@ def get_top_rated_movies(items, top_n):
         logger.error(f"Error sorting movies: {e}")
         return []
     
-def _perform_sqs_send_single(queue_url, message_body):
+def _perform_sqs_send_single(queue_url, message_body, message_group_id, deduplication_id):
     sqs.send_message(
         QueueUrl=queue_url,
-        MessageBody=message_body
+        MessageBody=message_body,
+        MessageGroupId=message_group_id,
+        MessageDeduplicationId=deduplication_id
     )
     return True 
 
-def send_batch_to_sqs(batch):
-    message_body = json.dumps(batch)
+def send_batch_to_sqs(batch, is_final_batch=False):
+    message_body = json.dumps({
+        "movies": batch,
+        "is_final_batch": is_final_batch
+    })
     description = f"Sending batch with {len(batch)} movies to SQS"
 
     try:
@@ -74,7 +80,9 @@ def send_batch_to_sqs(batch):
             _perform_sqs_send_single, 
             description,
             SQS_QUEUE_URL,           
-            message_body             
+            message_body ,
+            "movies-group",
+            str(uuid.uuid4())       
         )
     except Exception as e:
         logger.error(f"Final failure after all retries to send batch: {e}")
@@ -104,8 +112,10 @@ def lambda_handler(event, context):
     batches_to_send = [top_movies[i:i + batch_size] for i in range(0, len(top_movies), batch_size)]
     logger.info(f"Prepared {len(batches_to_send)} message(s) to send to SQS, each containing up to {batch_size} movies.")
 
-    for batch in batches_to_send:
-        if not send_batch_to_sqs(batch):
+    for idx, batch in enumerate(batches_to_send):
+        is_last = (idx == len(batches_to_send) - 1)
+        
+        if not send_batch_to_sqs(batch, is_final_batch=is_last):
             logger.error("Batch sending failed. Aborting.")
             return build_response(500, "Batch sending failed.")
 

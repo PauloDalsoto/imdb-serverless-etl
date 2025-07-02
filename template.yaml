@@ -13,7 +13,8 @@ Resources:
   ImdbMovieQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: imdb-movie-queue
+      QueueName: imdb-movie-queue.fifo
+      FifoQueue: true
       VisibilityTimeout: 60
       MessageRetentionPeriod: 86400
       ReceiveMessageWaitTimeSeconds: 5
@@ -34,7 +35,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: '2010-09-09'
         Statement:
           - Effect: Allow
             Principal:
@@ -45,7 +46,7 @@ Resources:
       Policies:
         - PolicyName: SQSWritePolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: '2010-09-09'
             Statement:
               - Effect: Allow
                 Action: sqs:SendMessage
@@ -81,7 +82,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: '2010-09-09'
         Statement:
           - Effect: Allow
             Principal:
@@ -92,12 +93,12 @@ Resources:
       Policies:
         - PolicyName: S3WriteAndSQSReadPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: '2010-09-09'
             Statement:
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: !Join ['', ['arn:aws:s3:::', !Ref EnrichedDataS3Bucket, '/*']]
+                Resource: !Join ['', ['arn:aws:s3:::', !Ref EnrichedDataS3Bucket, '/bronze/*']]
               - Effect: Allow
                 Action:
                   - sqs:ReceiveMessage
@@ -132,6 +133,71 @@ Resources:
           Properties:
             Queue: !GetAtt ImdbMovieQueue.Arn
             BatchSize: 1
+
+  # IAM Role for Lambda Function 3 (ProcessBronzeToSilverFunction)
+  ProcessBronzeToSilverLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: process-bronze-to-silver-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2010-09-09'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ProcessBronzeToSilverS3Policy
+          PolicyDocument:
+            Version: '2010-09-09'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Sub arn:aws:s3:::${EnrichedDataS3Bucket}
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub arn:aws:s3:::${EnrichedDataS3Bucket}/bronze/*
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub arn:aws:s3:::${EnrichedDataS3Bucket}/silver/*
+
+
+  # Lambda Function 3: ProcessBronzeToSilverFunction
+  ProcessBronzeToSilverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: process-bronze-to-silver
+      Description: Triggered when _success is created in bronze/, converts to silver.
+      CodeUri: src/
+      Handler: process_bronze_to_silver.lambda_handler
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 256
+      Role: !GetAtt ProcessBronzeToSilverLambdaRole.Arn
+      Events:
+        SuccessFileCreated:
+          Type: S3
+          Properties:
+            Bucket: !Ref EnrichedDataS3Bucket
+            Events: s3:ObjectCreated:Put
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: bronze/
+                  - Name: suffix
+                    Value: _success
+      Environment:
+        Variables:
+          SOURCE_S3_BUCKET: !Sub arn:aws:s3:::${EnrichedDataS3Bucket}/bronze/*
+          TARGET_S3_BUCKET: !Sub arn:aws:s3:::${EnrichedDataS3Bucket}/silver/*
+          MAX_RETRIES: "3"
+          BASE_DELAY_SECONDS: "1"
 
 Outputs:
   ImdbMovieQueueUrl:

@@ -5,6 +5,8 @@ import requests
 import logging
 from botocore.exceptions import ClientError
 from utils import build_response, with_retries
+from datetime import datetime
+
 
 # Logger setup
 logger = logging.getLogger()
@@ -23,6 +25,8 @@ MAX_RETRIES = int(os.environ.get('MAX_RETRIES', '3'))
 BASE_DELAY_SECONDS = int(os.environ.get('BASE_DELAY_SECONDS', '1'))
 
 CONTENT_TYPE_JSON = "application/json"
+
+today_str = datetime.now().strftime("%Y-%m-%d")
 
 def get_secret(secret_name):
     response = with_retries(
@@ -115,11 +119,13 @@ def lambda_handler(event, context):
         message_id = record.get('messageId', 'N/A')
         try:
             body = json.loads(record['body'])
-            if not isinstance(body, list):
-                logger.error(f"Message ID {message_id}: Expected a list, got: {type(body)}")
+            movies = body.get("movies")
+            is_final_batch = body.get("is_final_batch", False)
+            if not isinstance(movies, list):
+                logger.error(f"Message ID {message_id}: Expected a list in 'movies', got: {type(movies)}")
                 continue
 
-            for movie in body:
+            for movie in movies:
                 imdb_id = movie.get('id')
                 title = movie.get('title', 'Unknown Title')
 
@@ -132,12 +138,18 @@ def lambda_handler(event, context):
                 enriched_data = call_omdb_api(imdb_id, omdb_api_key) or {}
                 enriched_movie = {**movie, **enriched_data}
 
-                s3_key = f"bronze/{imdb_id}.json"
+                s3_key = f"bronze/{today_str}/{imdb_id}.json"
                 if not put_object_to_s3(TARGET_S3_BUCKET, s3_key, json.dumps(enriched_movie, indent=2)):
                     logger.error(f"Failed to upload {imdb_id} to S3.")
                     return build_response(500, f"Failed to upload {imdb_id} to S3.")
 
             logger.info(f"Processed message ID {message_id} with {len(body)} movies.")
+            
+            if is_final_batch:
+                logger.info("Final batch detected. Triggering post-processing step...")
+
+                success_key = f"bronze/{today_str}/_SUCCESS"
+                put_object_to_s3(TARGET_S3_BUCKET, success_key, " ")
 
         except json.JSONDecodeError as e:
             logger.error(f"Message ID {message_id} has invalid JSON: {e}")
