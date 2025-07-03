@@ -24,3 +24,9 @@ disable_rollback = true
 
 # No image repositories used in this project
 image_repositories = []
+
+parameter_overrides = [
+  "BronzeBucketName=mdb-etl-bronze-whoortuydmo9",
+  "SilverBucketName=imdb-etl-silver-whoortuydmo9", 
+  "GoldBucketName=imdb-etl-gold-whoortuydmo9"
+]

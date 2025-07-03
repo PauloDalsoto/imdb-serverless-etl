@@ -1,14 +1,55 @@
-# template.yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   imdb-serverless-etl
 
   Serverless data pipeline for IMDb movie data enrichment, demonstrating
-  the Bronze Layer Architecture. Permissions are granted to read the OMDb API Key
+  the Medallion Architecture. Permissions are granted to read the OMDb API Key
   from a manually managed Secrets Manager secret.
 
+Parameters:
+  BronzeBucketName:
+    Type: String
+    Description: "Name of the Bronze S3 Bucket"
+  SilverBucketName:
+    Type: String
+    Description: "Name of the Silver S3 Bucket"
+  GoldBucketName:
+    Type: String
+    Description: "Name of the Gold S3 Bucket"
+
 Resources:
+  # S3 Buckets
+  BronzeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BronzeBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  SilverBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref SilverBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  GoldBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref GoldBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
   # SQS Queue: Queue to decouple Lambda functions
   ImdbMovieQueue:
     Type: AWS::SQS::Queue
@@ -19,23 +60,12 @@ Resources:
       MessageRetentionPeriod: 86400
       ReceiveMessageWaitTimeSeconds: 5
 
-  # S3 Bucket: To store data
-  EnrichedDataS3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "imdb-etl-${AWS::AccountId}"
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
   # IAM Role for Lambda Function 1 (GetMoviesAndSendToQueueFunction)
   GetMoviesAndSendToQueueLambdaRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2010-09-09'
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -46,7 +76,7 @@ Resources:
       Policies:
         - PolicyName: SQSWritePolicy
           PolicyDocument:
-            Version: '2010-09-09'
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action: sqs:SendMessage
@@ -57,11 +87,12 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: GetMoviesAndSendToQueue
+      Description: Fetches top movies from IMDb and sends them to SQS.
       Handler: fetch_top_movies.lambda_handler
       Runtime: python3.13
       Timeout: 60
       MemorySize: 128
-      CodeUri: src/
+      CodeUri: lambdas/fetch_top_movies/
       Environment:
         Variables:
           SQS_QUEUE_URL: !Ref ImdbMovieQueue
@@ -82,7 +113,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2010-09-09'
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -93,12 +124,12 @@ Resources:
       Policies:
         - PolicyName: S3WriteAndSQSReadPolicy
           PolicyDocument:
-            Version: '2010-09-09'
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: !Join ['', ['arn:aws:s3:::', !Ref EnrichedDataS3Bucket, '/bronze/*']]
+                Resource: !Join ['', ['arn:aws:s3:::', !Ref BronzeBucket, '/bronze/*']]
               - Effect: Allow
                 Action:
                   - sqs:ReceiveMessage
@@ -114,15 +145,16 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: EnrichAndStoreMovie
-      Handler: enrich_movie.lambda_handler
+      Description: Enriches movie data from SQS and stores it in S3 (Bronze Layer).
+      Handler: enrich_and_store_movie.lambda_handler
       Runtime: python3.13
       Timeout: 60
       MemorySize: 128
-      CodeUri: src/
+      CodeUri: lambdas/enrich_and_store_movies/
       Environment:
         Variables:
           OMDB_API_SECRET_NAME: /imdb-etl/omdb-api-key 
-          TARGET_S3_BUCKET: !Ref EnrichedDataS3Bucket 
+          TARGET_S3_BUCKET: !Join ['', ['arn:aws:s3:::', !Ref BronzeBucket, '/bronze/*']]
           OMDB_URL: https://www.omdbapi.com/
           MAX_RETRIES: "3"
           BASE_DELAY_SECONDS: "1"
@@ -138,9 +170,8 @@ Resources:
   ProcessBronzeToSilverLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: process-bronze-to-silver-lambda-role
       AssumeRolePolicyDocument:
-        Version: '2010-09-09'
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -151,64 +182,106 @@ Resources:
       Policies:
         - PolicyName: ProcessBronzeToSilverS3Policy
           PolicyDocument:
-            Version: '2010-09-09'
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Sub arn:aws:s3:::${EnrichedDataS3Bucket}
+                Resource: !Join ['', ['arn:aws:s3:::', !Ref BronzeBucket]]
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub arn:aws:s3:::${EnrichedDataS3Bucket}/bronze/*
+                Resource: !Join ['', ['arn:aws:s3:::', !Ref BronzeBucket, '/bronze/*']]
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: !Sub arn:aws:s3:::${EnrichedDataS3Bucket}/silver/*
+                Resource: !Join ['', ['arn:aws:s3:::', !Ref SilverBucket, '/silver/*']]
 
-
-  # Lambda Function 3: ProcessBronzeToSilverFunction
+# Lambda Function 3: ProcessBronzeToSilverFunction
   ProcessBronzeToSilverFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: process-bronze-to-silver
+      FunctionName: ProcessBronzeToSilver
       Description: Triggered when _success is created in bronze/, converts to silver.
-      CodeUri: src/
+      CodeUri: lambdas/process_bronze_to_silver/
       Handler: process_bronze_to_silver.lambda_handler
       Runtime: python3.13
       Timeout: 60
       MemorySize: 256
       Role: !GetAtt ProcessBronzeToSilverLambdaRole.Arn
-      Events:
-        SuccessFileCreated:
-          Type: S3
-          Properties:
-            Bucket: !Ref EnrichedDataS3Bucket
-            Events: s3:ObjectCreated:Put
-            Filter:
-              S3Key:
-                Rules:
-                  - Name: prefix
-                    Value: bronze/
-                  - Name: suffix
-                    Value: _success
+      Layers:
+        - !Sub arn:aws:lambda:${AWS::Region}:336392948345:layer:AWSSDKPandas-Python313:3
       Environment:
         Variables:
-          SOURCE_S3_BUCKET: !Sub arn:aws:s3:::${EnrichedDataS3Bucket}/bronze/*
-          TARGET_S3_BUCKET: !Sub arn:aws:s3:::${EnrichedDataS3Bucket}/silver/*
           MAX_RETRIES: "3"
           BASE_DELAY_SECONDS: "1"
+          S3_BUCKET_SOURCE: !Ref BronzeBucketName
+          S3_BUCKET_TARGET: !Ref SilverBucketName
+
+  # IAM Role for Lambda Function 4 (ProcessSilverToGoldFunction)
+  ProcessSilverToGoldLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ProcessBronzeToSilverS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Join ['', ['arn:aws:s3:::', !Ref SilverBucket]]
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Join ['', ['arn:aws:s3:::', !Ref SilverBucket, '/silver/*']]
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Join ['', ['arn:aws:s3:::', !Ref GoldBucket, '/gold/*']]
 
 Outputs:
+  BronzeBucketName:
+    Description: "Name of the Bronze S3 Bucket"
+    Value: !Ref BronzeBucketName
+    Export:
+      Name: "IMDB-BronzeBucketName"
+  SilverBucketName:
+    Description: "Name of the Silver S3 Bucket"
+    Value: !Ref SilverBucketName
+    Export:
+      Name: "IMDB-SilverBucketName"
+  GoldBucketName:
+    Description: "Name of the Gold S3 Bucket"
+    Value: !Ref GoldBucketName
+    Export:
+      Name: "IMDB-GoldBucketName"
   ImdbMovieQueueUrl:
-    Description: "URL of the SQS Queue"
+    Description: "URL of the IMDb Movie SQS Queue"
     Value: !Ref ImdbMovieQueue
-  EnrichedDataS3BucketName:
-    Description: "Name of the S3 Bucket for enriched data (Bronze Layer)"
-    Value: !Ref EnrichedDataS3Bucket
+    Export:
+      Name: "IMDB-ImdbMovieQueueUrl"
   GetMoviesAndSendToQueueFunctionArn:
     Description: "ARN of the GetMoviesAndSendToQueue Lambda Function"
     Value: !GetAtt GetMoviesAndSendToQueueFunction.Arn
+    Export:
+      Name: "IMDB-GetMoviesAndSendToQueueFunctionArn"
   EnrichAndStoreMovieFunctionArn:
     Description: "ARN of the EnrichAndStoreMovie Lambda Function"
     Value: !GetAtt EnrichAndStoreMovieFunction.Arn
+    Export:
+      Name: "IMDB-EnrichAndStoreMovieFunctionArn"
+  ProcessBronzeToSilverFunctionArn:
+    Description: "ARN of the ProcessBronzeToSilver Lambda Function"
+    Value: !GetAtt ProcessBronzeToSilverFunction.Arn
+    Export:
+      Name: "IMDB-ProcessBronzeToSilverFunctionArn"
