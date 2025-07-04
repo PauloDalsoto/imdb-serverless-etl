@@ -2,9 +2,9 @@ import os
 import logging
 import boto3
 
-from src.utils import build_response
-from src.imdb_service import IMDBService
-from src.sqs_service import SQSService
+from .src.utils import build_response
+from .src.imdb_service import IMDBService
+from .src.sqs_service import SQSService
 
 # Logger setup
 logger = logging.getLogger()

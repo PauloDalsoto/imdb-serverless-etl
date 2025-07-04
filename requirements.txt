@@ -1,2 +1,5 @@
 toml
 boto3
+moto
+pytest
+moto
