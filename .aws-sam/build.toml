@@ -27,4 +27,13 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["ProcessBronzeToSilverFunction"]
 
+[function_build_definitions.03529777-9f25-462c-bdc9-0480adbadd7c]
+codeuri = "C:\\Users\\I749044\\Documents\\git\\imdb-serverless-etl\\lambdas\\process_silver_to_gold"
+runtime = "python3.13"
+architecture = "x86_64"
+handler = "process_silver_to_gold.lambda_handler"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["ProcessSilverToGoldFunction"]
+
 [layer_build_definitions]

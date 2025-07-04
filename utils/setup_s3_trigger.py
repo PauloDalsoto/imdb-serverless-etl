@@ -24,7 +24,7 @@ def get_stack_outputs(cf, stack_name):
         outputs = response['Stacks'][0]['Outputs']
     except Exception as e:
         print(f"[-] Error fetching outputs:...")
-        return {}
+        exit()
 
     return {o['ExportName']: o['OutputValue'] for o in outputs}
 
@@ -33,7 +33,7 @@ def add_lambda_permission(lambda_client, function_name, bucket_arn):
         print(f"\n[+] Adding permission for bucket to invoke function {function_name}")
         lambda_client.add_permission(
             FunctionName=function_name,
-            StatementId="s3invoke-processbronze",
+            StatementId=f"{function_name}-s3-trigger",
             Action="lambda:InvokeFunction",
             Principal="s3.amazonaws.com",
             SourceArn=bucket_arn,
@@ -47,20 +47,22 @@ def configure_s3_notification(s3_client, bucket_name, lambda_arn):
     notification_config = {
         "LambdaFunctionConfigurations": [
             {
-                "Id": "BronzeToSilverTrigger",
+                "Id": f"{bucket_name}-s3-trigger",
                 "LambdaFunctionArn": lambda_arn,
                 "Events": ["s3:ObjectCreated:*"],
-                "Filter": {
-                    "Key": {
-                        "FilterRules": [
-                            {"Name": "prefix", "Value": "bronze/"},
-                            {"Name": "suffix", "Value": "_SUCCESS"},
-                        ]
-                    }
-                }
             }
         ]
     }
+
+    if "bronze" in bucket_name.lower():
+        notification_config["LambdaFunctionConfigurations"][0]["Filter"] = {
+            "Key": {
+                "FilterRules": [
+                    {"Name": "prefix", "Value": "bronze/"},
+                    {"Name": "suffix", "Value": "_SUCCESS"},
+                ]
+            }
+        }
 
     try:
         s3_client.put_bucket_notification_configuration(
@@ -77,12 +79,20 @@ if __name__ == "__main__":
 
     outputs = get_stack_outputs(cf, stack_name)
 
+    # Process Bronze to Silver Lambda
     bronze_bucket_name = outputs["IMDB-BronzeBucketName"]
     bronze_bucket_arn = f"arn:aws:s3:::{bronze_bucket_name}"
     lambda_function_arn = outputs["IMDB-ProcessBronzeToSilverFunctionArn"]
     lambda_function_name = lambda_function_arn.split(":")[-1]
-
     add_lambda_permission(lambda_client, lambda_function_name, bronze_bucket_arn)
     configure_s3_notification(s3_client, bronze_bucket_name, lambda_function_arn)
 
-    print("[✔] Configuration completed successfully!")
+    # Process Silver to Gold Lambda
+    silver_bucket_name = outputs["IMDB-SilverBucketName"]
+    silver_bucket_arn = f"arn:aws:s3:::{silver_bucket_name}"
+    silver_lambda_function_arn = outputs["IMDB-ProcessSilverToGoldFunctionArn"]
+    silver_lambda_function_name = silver_lambda_function_arn.split(":")[-1]
+    add_lambda_permission(lambda_client, silver_lambda_function_name, silver_bucket_arn)
+    configure_s3_notification(s3_client, silver_bucket_name, silver_lambda_function_arn)
+
+    print("\n[✔] Setup completed successfully!")

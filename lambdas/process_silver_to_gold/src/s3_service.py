@@ -1,5 +1,6 @@
-import json
+import io
 import boto3
+import pandas as pd
 from src.utils import with_retries
 
 class S3Service:
@@ -9,18 +10,9 @@ class S3Service:
         self.base_delay = base_delay
         self.s3 = boto3.client("s3")
 
-    def list_json_objects(self, bucket, prefix):
-        paginator = self.s3.get_paginator("list_objects_v2")
-        result = []
-        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
-            for obj in page.get("Contents", []):
-                if obj["Key"].endswith(".json") and "_success" not in obj["Key"]:
-                    result.append(obj["Key"])
-        return result
-
-    def load_json(self, bucket, key):
+    def load_csv(self, bucket, key):
         response = self.s3.get_object(Bucket=bucket, Key=key)
-        return json.loads(response["Body"].read())
+        return pd.read_csv(io.BytesIO(response['Body'].read()))
 
     def save_csv(self, bucket, key, csv_data):
         with_retries(
@@ -28,10 +20,10 @@ class S3Service:
             self.max_retries,
             self.base_delay,
             self.s3.put_object,
-            f"Uploading silver file to {key}",
+            f"Uploading gold file to {key}",
             Bucket=bucket,
             Key=key,
             Body=csv_data.encode("utf-8"),
             ContentType="text/csv"
         )
-        self.logger.info(f"Saved silver file to s3://{bucket}/{key}")
+        self.logger.info(f"Saved gold file to s3://{bucket}/{key}")

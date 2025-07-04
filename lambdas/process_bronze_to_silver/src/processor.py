@@ -14,7 +14,7 @@ class BronzeToSilverProcessor:
         json_objects = [self.s3.load_json(self.source_bucket, key) for key in object_keys]
         df = self.normalize_records(json_objects)
 
-        output_key = "silver/movies.csv"
+        output_key = "silver/movies_normalized.csv"
         self.s3.save_csv(self.target_bucket, output_key, df.to_csv(index=False))
 
         return len(df)

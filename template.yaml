@@ -154,7 +154,7 @@ Resources:
       Environment:
         Variables:
           OMDB_API_SECRET_NAME: /imdb-etl/omdb-api-key 
-          TARGET_S3_BUCKET: !Join ['', ['arn:aws:s3:::', !Ref BronzeBucket, '/bronze/*']]
+          TARGET_S3_BUCKET: !Ref BronzeBucket
           OMDB_URL: https://www.omdbapi.com/
           MAX_RETRIES: "3"
           BASE_DELAY_SECONDS: "1"
@@ -249,6 +249,27 @@ Resources:
                   - s3:PutObject
                 Resource: !Join ['', ['arn:aws:s3:::', !Ref GoldBucket, '/gold/*']]
 
+  # Lambda Function 4: ProcessSilverToGoldFunction
+  ProcessSilverToGoldFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ProcessSilverToGold
+      Description: Triggered when file is created in silver/, converts to gold.
+      CodeUri: lambdas/process_silver_to_gold/
+      Handler: process_silver_to_gold.lambda_handler
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 256
+      Role: !GetAtt ProcessSilverToGoldLambdaRole.Arn
+      Layers:
+        - !Sub arn:aws:lambda:${AWS::Region}:336392948345:layer:AWSSDKPandas-Python313:3
+      Environment:
+        Variables:
+          MAX_RETRIES: "3"
+          BASE_DELAY_SECONDS: "1"
+          S3_BUCKET_SOURCE: !Ref SilverBucketName
+          S3_BUCKET_TARGET: !Ref GoldBucketName
+
 Outputs:
   BronzeBucketName:
     Description: "Name of the Bronze S3 Bucket"
@@ -265,11 +286,6 @@ Outputs:
     Value: !Ref GoldBucketName
     Export:
       Name: "IMDB-GoldBucketName"
-  ImdbMovieQueueUrl:
-    Description: "URL of the IMDb Movie SQS Queue"
-    Value: !Ref ImdbMovieQueue
-    Export:
-      Name: "IMDB-ImdbMovieQueueUrl"
   GetMoviesAndSendToQueueFunctionArn:
     Description: "ARN of the GetMoviesAndSendToQueue Lambda Function"
     Value: !GetAtt GetMoviesAndSendToQueueFunction.Arn
@@ -285,3 +301,9 @@ Outputs:
     Value: !GetAtt ProcessBronzeToSilverFunction.Arn
     Export:
       Name: "IMDB-ProcessBronzeToSilverFunctionArn"
+  ProcessSilverToGoldFunctionArn:
+    Description: "ARN of the ProcessSilverToGold Lambda Function"
+    Value: !GetAtt ProcessSilverToGoldFunction.Arn
+    Export:
+      Name: "IMDB-ProcessSilverToGoldFunctionArn"
+  
