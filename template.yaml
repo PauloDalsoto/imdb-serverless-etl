@@ -8,6 +8,12 @@ Description: >
   from a manually managed Secrets Manager secret.
 
 Parameters:
+  maxRetries:
+    Type: String
+    Description: "Maximum number of retries for Lambda functions"
+  baseDelaySeconds:
+    Type: String
+    Description: "Base delay in seconds for retry logic"
   BronzeBucketName:
     Type: String
     Description: "Name of the Bronze S3 Bucket"
@@ -17,6 +23,12 @@ Parameters:
   GoldBucketName:
     Type: String
     Description: "Name of the Gold S3 Bucket"
+  imdbDataUrl:
+    Type: String
+    Description: "URL to fetch the top movies data from IMDb"
+  omdbApiUrl:
+    Type: String
+    Description: "Base URL for the OMDb API"
 
 Resources:
   # S3 Buckets
@@ -96,9 +108,9 @@ Resources:
       Environment:
         Variables:
           SQS_QUEUE_URL: !Ref ImdbMovieQueue
-          IMDB_DATA_URL: https://top-movies.s3.eu-central-1.amazonaws.com/Top250Movies.json
-          MAX_RETRIES: "3"
-          BASE_DELAY_SECONDS: "1"
+          IMDB_DATA_URL: !Ref imdbDataUrl
+          MAX_RETRIES: !Ref maxRetries
+          BASE_DELAY_SECONDS: !Ref baseDelaySeconds
       Role: !GetAtt GetMoviesAndSendToQueueLambdaRole.Arn
       Events:
         DailyScheduler:
@@ -155,9 +167,9 @@ Resources:
         Variables:
           OMDB_API_SECRET_NAME: /imdb-etl/omdb-api-key 
           TARGET_S3_BUCKET: !Ref BronzeBucket
-          OMDB_URL: https://www.omdbapi.com/
-          MAX_RETRIES: "3"
-          BASE_DELAY_SECONDS: "1"
+          OMDB_URL: !Ref omdbApiUrl
+          MAX_RETRIES: !Ref maxRetries
+          BASE_DELAY_SECONDS: !Ref baseDelaySeconds
       Role: !GetAtt EnrichAndStoreMovieLambdaRole.Arn
       Events:
         SQSTrigger:
@@ -213,8 +225,8 @@ Resources:
         - !Sub arn:aws:lambda:${AWS::Region}:336392948345:layer:AWSSDKPandas-Python313:3
       Environment:
         Variables:
-          MAX_RETRIES: "3"
-          BASE_DELAY_SECONDS: "1"
+          MAX_RETRIES: !Ref maxRetries
+          BASE_DELAY_SECONDS: !Ref baseDelaySeconds
           S3_BUCKET_SOURCE: !Ref BronzeBucketName
           S3_BUCKET_TARGET: !Ref SilverBucketName
 
@@ -265,8 +277,8 @@ Resources:
         - !Sub arn:aws:lambda:${AWS::Region}:336392948345:layer:AWSSDKPandas-Python313:3
       Environment:
         Variables:
-          MAX_RETRIES: "3"
-          BASE_DELAY_SECONDS: "1"
+          MAX_RETRIES: !Ref maxRetries
+          BASE_DELAY_SECONDS: !Ref baseDelaySeconds
           S3_BUCKET_SOURCE: !Ref SilverBucketName
           S3_BUCKET_TARGET: !Ref GoldBucketName
 

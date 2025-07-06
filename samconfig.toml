@@ -26,7 +26,11 @@ disable_rollback = true
 image_repositories = []
 
 parameter_overrides = [
+  "maxRetries=3",
+  "baseDelaySeconds=1",
   "BronzeBucketName=mdb-etl-bronze-whoortuydmo9",
   "SilverBucketName=imdb-etl-silver-whoortuydmo9", 
-  "GoldBucketName=imdb-etl-gold-whoortuydmo9"
+  "GoldBucketName=imdb-etl-gold-whoortuydmo9",
+  "imdbDataUrl=https://top-movies.s3.eu-central-1.amazonaws.com/Top250Movies.json",
+  "omdbApiUrl=https://www.omdbapi.com/"
 ]
