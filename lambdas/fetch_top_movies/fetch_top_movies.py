@@ -42,7 +42,13 @@ def lambda_handler(event, context):
         logger=logger
     )
 
-    data = imdb_service.fetch_movie_data()
+    try:
+        logger.info("Fetching movie data from IMDB service.")
+        data = imdb_service.fetch_movie_data()
+    except Exception as e:
+        logger.error(f"Error fetching movie data: {e}")
+        return build_response(500, "Failed to fetch movie data.")
+
     if not data or 'items' not in data:
         logger.error("Invalid or missing movie data.")
         return build_response(500, "Failed to fetch movie data.")
@@ -55,11 +61,16 @@ def lambda_handler(event, context):
     batches = [top_movies[i:i + batch_size] for i in range(0, len(top_movies), batch_size)]
     logger.info(f"Prepared {len(batches)} message(s) to send to SQS, each with up to {batch_size} movies.")
 
-    for idx, batch in enumerate(batches):
-        is_last = (idx == len(batches) - 1)
-        if not sqs_service.send_batch(batch, is_final_batch=is_last):
-            logger.error("Batch sending failed. Aborting.")
-            return build_response(500, "Batch sending failed.")
+    try:
+        for idx, batch in enumerate(batches):
+            is_last = (idx == len(batches) - 1)
+            if not sqs_service.send_batch(batch, is_final_batch=is_last):
+                logger.error("Batch sending failed. Aborting.")
+                return build_response(500, "Batch sending failed.")
+            
+    except Exception as e:
+        logger.error(f"Error sending batches to SQS: {e}")
+        return build_response(500, "Failed to send batches to SQS.")
 
     logger.info("All batches sent successfully.")
     return build_response(200, "All movies sent to SQS.")
