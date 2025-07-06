@@ -24,14 +24,15 @@ def get_bucket_names_from_toml(config):
     for override in parameter_overrides_list:
         if '=' in override:
             key, value = override.split('=', 1) 
-            bucket_params[key] = value.strip() 
+            if key.endswith('BucketName'):
+                bucket_params[key] = value.strip()
     return bucket_params
 
 def empty_s3_buckets(buckets, region_name):
     s3_resource = boto3.resource('s3', region_name=region_name)
 
     for bucket_name in buckets.values():
-        logging.info(f"Startiing clean up for: {bucket_name} bucket.")
+        logging.info(f"Starting clean up for: {bucket_name} bucket.")
         bucket = s3_resource.Bucket(bucket_name)
 
         try:
