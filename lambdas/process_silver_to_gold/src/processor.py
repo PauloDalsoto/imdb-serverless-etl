@@ -29,9 +29,7 @@ class SilverToGoldProcessor:
                     'released', 'runtime', 'genre', 'director', 'language',
                     'country', 'awards', 'metascore', 'imdbvotes', 'boxoffice'
                 ]]
-                .dropna()
-                .sort_values(by='imdbrating', ascending=False)
-                .head(10)
+                .sort_values(by='rank', ascending=False)
             )
             self.s3.save_csv(self.target_bucket, f"{prefix}topN_rated.csv", topN_rated_df.to_csv(index=False))
 

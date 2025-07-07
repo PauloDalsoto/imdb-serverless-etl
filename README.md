@@ -8,6 +8,8 @@ Scalable data pipeline using AWS Lambda, SQS, S3, Secrets Manager and more.
 
 This project implements a **serverless ETL pipeline** that demonstrates the **Medallion Architecture** pattern for data processing on AWS. The pipeline fetches IMDb Top 250 movie data, enriches it with additional metadata from the OMDb API, and processes it through multiple layers (Bronze → Silver → Gold) to create a clean, analytics-ready dataset.
 
+![Dashboard](/quickSight/dash.gif)
+
 ### Key Features
 
 - **Serverless Architecture**: Built entirely on AWS managed services  
