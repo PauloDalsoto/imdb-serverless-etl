@@ -66,19 +66,21 @@ def lambda_handler(event, context):
 
                 s3_key = f"bronze/{today_str}/{imdb_id}.json"
                 if not s3_service.upload_json(TARGET_S3_BUCKET, s3_key, enriched_movie):
+                    logger.error(f"Failed to upload {imdb_id} to S3.")
                     return build_response(500, f"Failed to upload {imdb_id} to S3.")
 
             logger.info(f"Processed message ID {message_id} with {len(movies)} movie(s).")
 
             if is_final_batch:
                 logger.info("Final batch detected. Writing _SUCCESS marker...")
-                s3_service.upload_string(TARGET_S3_BUCKET, f"bronze/{today_str}/_SUCCESS", " ")
+                if not s3_service.upload_string(TARGET_S3_BUCKET, f"bronze/{today_str}/_SUCCESS", " "):
+                    logger.error("Failed to write _SUCCESS marker to S3.")
+                    return build_response(500, "Failed to write _SUCCESS marker to S3.")
 
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in message ID {message_id}: {e}")
         except Exception as e:
             logger.error(f"Unhandled error in message ID {message_id}: {e}")
-            return build_response(500, f"Error in message ID {message_id}: {e}")
+            return build_response(500, f"Error in message ID {message_id}")
 
     logger.info("Finished processing all records.")
     return build_response(200, "All records processed.")
+    
