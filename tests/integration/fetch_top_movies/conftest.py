@@ -6,10 +6,19 @@ from pathlib import Path
 from moto import mock_aws
 from unittest.mock import patch
 
-# Add project root to Python path
-project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root))
+# Add the fetch_top_movies directory to sys.path to resolve imports
+fetch_top_movies_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'lambdas', 'fetch_top_movies')
+fetch_top_movies_path = os.path.abspath(fetch_top_movies_path)
+if fetch_top_movies_path not in sys.path:
+    sys.path.insert(0, fetch_top_movies_path)
 
+@pytest.fixture(autouse=True)
+def cleanup_sys_path():
+    """Fixture to clean up sys.path after tests."""
+    yield
+    if fetch_top_movies_path in sys.path:
+        sys.path.remove(fetch_top_movies_path)  
+        
 @pytest.fixture
 def aws_credentials():
     os.environ['AWS_ACCESS_KEY_ID'] = 'testing'

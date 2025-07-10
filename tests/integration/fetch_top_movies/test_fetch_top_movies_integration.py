@@ -5,7 +5,6 @@ import boto3
 import importlib
 from unittest.mock import patch, MagicMock
 from moto import mock_aws
-from lambdas.fetch_top_movies.fetch_top_movies import lambda_handler
 
 @pytest.fixture
 def setup_test_environment():
