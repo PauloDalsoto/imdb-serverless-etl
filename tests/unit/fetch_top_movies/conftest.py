@@ -10,7 +10,6 @@ fetch_top_movies_path = os.path.abspath(fetch_top_movies_path)
 if fetch_top_movies_path not in sys.path:
     sys.path.insert(0, fetch_top_movies_path)
 
-# Set environment variables
 os.environ['SQS_QUEUE_URL'] = 'test_queue'
 os.environ['IMDB_DATA_URL'] = 'test_url'
 os.environ['MAX_RETRIES'] = '2'
@@ -18,14 +17,12 @@ os.environ['BASE_DELAY_SECONDS'] = '1'
 
 @pytest.fixture(autouse=True)
 def cleanup_sys_path():
-    """Fixture to clean up sys.path after tests."""
     yield
     if fetch_top_movies_path in sys.path:
         sys.path.remove(fetch_top_movies_path)  
 
 @pytest.fixture
 def mock_services():
-    """Fixture that provides mocked services for testing."""
     mock_imdb = MagicMock()
     mock_sqs = MagicMock()
     
