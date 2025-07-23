@@ -11,10 +11,7 @@ def mock_context():
     return MagicMock()
 
 def test_lambda_handler_success(mock_event, mock_context):
-    with patch("lambdas.process_silver_to_gold.process_silver_to_gold.S3Service") as mock_s3_service_class, \
-         patch("lambdas.process_silver_to_gold.process_silver_to_gold.SilverToGoldProcessor") as mock_processor_class:
-
-        mock_s3_service = mock_s3_service_class.return_value
+    with patch("lambdas.process_silver_to_gold.process_silver_to_gold.SilverToGoldProcessor") as mock_processor_class:
         mock_processor = mock_processor_class.return_value
 
         mock_processor.process.return_value = 100
@@ -26,10 +23,7 @@ def test_lambda_handler_success(mock_event, mock_context):
         mock_processor.process.assert_called_once()
 
 def test_lambda_handler_empty_csv(mock_event, mock_context):
-    with patch("lambdas.process_silver_to_gold.process_silver_to_gold.S3Service") as mock_s3_service_class, \
-         patch("lambdas.process_silver_to_gold.process_silver_to_gold.SilverToGoldProcessor") as mock_processor_class:
-
-        mock_s3_service = mock_s3_service_class.return_value
+    with patch("lambdas.process_silver_to_gold.process_silver_to_gold.SilverToGoldProcessor") as mock_processor_class:
         mock_processor = mock_processor_class.return_value
 
         mock_processor.process.side_effect = Exception("No data to process, empty csv file!")
@@ -40,10 +34,7 @@ def test_lambda_handler_empty_csv(mock_event, mock_context):
         assert "No data to process" in result["body"]
 
 def test_lambda_handler_unexpected_error(mock_event, mock_context):
-    with patch("lambdas.process_silver_to_gold.process_silver_to_gold.S3Service") as mock_s3_service_class, \
-         patch("lambdas.process_silver_to_gold.process_silver_to_gold.SilverToGoldProcessor") as mock_processor_class:
-
-        mock_s3_service = mock_s3_service_class.return_value
+    with patch("lambdas.process_silver_to_gold.process_silver_to_gold.SilverToGoldProcessor") as mock_processor_class:
         mock_processor = mock_processor_class.return_value
 
         mock_processor.process.side_effect = Exception("Unexpected error")

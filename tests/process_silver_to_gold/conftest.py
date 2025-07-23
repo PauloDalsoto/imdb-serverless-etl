@@ -13,7 +13,6 @@ if process_silver_to_gold_path not in sys.path:
 
 @pytest.fixture(autouse=True)
 def cleanup_sys_path():
-    """Fixture to clean up sys.path after tests."""
     yield
     if str(process_silver_to_gold_path) in sys.path:
         sys.path.remove(str(process_silver_to_gold_path))

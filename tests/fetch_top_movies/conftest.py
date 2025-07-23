@@ -3,6 +3,7 @@ import os
 import sys
 from unittest.mock import patch, MagicMock
 
+# Ensure the fetch_top_movies module is in the path for testing
 fetch_top_movies_path = os.path.join(os.path.dirname(__file__), '..', '..', 'lambdas', 'fetch_top_movies')
 fetch_top_movies_path = os.path.abspath(fetch_top_movies_path)
 if fetch_top_movies_path not in sys.path:

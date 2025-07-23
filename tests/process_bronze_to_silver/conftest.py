@@ -14,7 +14,6 @@ if process_bronze_to_silver_path not in sys.path:
 
 @pytest.fixture(autouse=True)
 def cleanup_sys_path():
-    """Fixture to clean up sys.path after tests."""
     yield
     if str(process_bronze_to_silver_path) in sys.path:
         sys.path.remove(str(process_bronze_to_silver_path))
@@ -58,10 +57,3 @@ def environment_variables(s3_buckets):
     }
     with patch.dict(os.environ, env_vars):
         yield env_vars
-
-@pytest.fixture(autouse=True)
-def cleanup_sys_path():
-    """Fixture to clean up sys.path after tests."""
-    yield
-    if str(process_bronze_to_silver_path) in sys.path:
-        sys.path.remove(str(process_bronze_to_silver_path))

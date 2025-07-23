@@ -14,7 +14,6 @@ def processor(mock_s3_service):
     return SilverToGoldProcessor(mock_s3_service, "source-bucket", "target-bucket")
 
 def test_process_success(processor, mock_s3_service):
-    # Mock the return value of load_csv to simulate a valid DataFrame
     mock_df = pd.DataFrame({
         'rank': [1, 2, 3],
         'title': ['Movie1', 'Movie2', 'Movie3'],
@@ -34,19 +33,15 @@ def test_process_success(processor, mock_s3_service):
     })
     mock_s3_service.load_csv.return_value = mock_df
 
-    # Call the process method
     record_count = processor.process("silver/movies_normalized.csv")
 
-    # Assertions
     assert record_count == 3
     mock_s3_service.save_csv.assert_called()
 
 def test_process_empty_csv(processor, mock_s3_service):
-    # Mock the return value of load_csv to simulate an empty DataFrame
     mock_df = MagicMock()
     mock_df.empty = True
     mock_s3_service.load_csv.return_value = mock_df
 
-    # Call the process method and expect an exception
     with pytest.raises(Exception, match="No data to process, empty csv file!"):
         processor.process("silver/movies_normalized.csv")
