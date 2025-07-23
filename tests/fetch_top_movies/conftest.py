@@ -33,7 +33,12 @@ def mock_services():
             'imdb_class': mock_imdb_class,
             'sqs_class': mock_sqs_class
         }
-        
+
+os.environ['SQS_QUEUE_URL'] = 'test_queue'
+os.environ['IMDB_DATA_URL'] = 'test_url'
+os.environ['MAX_RETRIES'] = '3'
+os.environ['BASE_DELAY_SECONDS'] = '1'
+
 @pytest.fixture
 def mock_event():
     return {
