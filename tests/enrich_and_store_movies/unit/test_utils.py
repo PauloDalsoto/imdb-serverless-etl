@@ -3,7 +3,6 @@ import json
 from unittest.mock import MagicMock
 from lambdas.fetch_top_movies.src.utils import build_response, with_retries
 
-
 def test_build_response_success():
     result = build_response(200, "Success")
     

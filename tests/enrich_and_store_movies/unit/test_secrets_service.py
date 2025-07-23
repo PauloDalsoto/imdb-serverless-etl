@@ -4,14 +4,6 @@ from unittest.mock import MagicMock, patch
 from lambdas.enrich_and_store_movies.src.secrets_service import SecretsService
 
 @pytest.fixture
-def mock_logger():
-    return MagicMock()
-
-@pytest.fixture
-def mock_secrets_client():
-    return MagicMock()
-
-@pytest.fixture
 def secrets_service(mock_secrets_client, mock_logger):
     return SecretsService(
         client=mock_secrets_client,

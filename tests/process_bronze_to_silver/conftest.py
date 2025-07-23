@@ -6,10 +6,17 @@ from unittest.mock import patch
 import sys
 from pathlib import Path
 
-# Add the process_bronze_to_silver directory to sys.path to resolve imports
-process_bronze_to_silver_path = Path(__file__).resolve().parents[3] / 'lambdas' / 'process_bronze_to_silver'
-if str(process_bronze_to_silver_path) not in sys.path:
-    sys.path.insert(0, str(process_bronze_to_silver_path))
+process_bronze_to_silver_path = os.path.join(os.path.dirname(__file__), '..', '..', 'lambdas', 'process_bronze_to_silver')
+process_bronze_to_silver_path = os.path.abspath(process_bronze_to_silver_path)
+if process_bronze_to_silver_path not in sys.path:
+    sys.path.insert(0, process_bronze_to_silver_path)
+
+@pytest.fixture(autouse=True)
+def cleanup_sys_path():
+    """Fixture to clean up sys.path after tests."""
+    yield
+    if str(process_bronze_to_silver_path) in sys.path:
+        sys.path.remove(str(process_bronze_to_silver_path))
 
 @pytest.fixture
 def aws_credentials():

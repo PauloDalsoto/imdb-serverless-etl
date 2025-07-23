@@ -6,10 +6,10 @@ from unittest.mock import patch
 import sys
 from pathlib import Path
 
-# Add the process_silver_to_gold directory to sys.path to resolve imports
-process_silver_to_gold_path = Path(__file__).resolve().parents[3] / 'lambdas' / 'process_silver_to_gold'
-if str(process_silver_to_gold_path) not in sys.path:
-    sys.path.insert(0, str(process_silver_to_gold_path))
+process_silver_to_gold_path = os.path.join(os.path.dirname(__file__), '..', '..', 'lambdas', 'process_silver_to_gold')
+process_silver_to_gold_path = os.path.abspath(process_silver_to_gold_path)
+if process_silver_to_gold_path not in sys.path:
+    sys.path.insert(0, process_silver_to_gold_path)
 
 @pytest.fixture(autouse=True)
 def cleanup_sys_path():

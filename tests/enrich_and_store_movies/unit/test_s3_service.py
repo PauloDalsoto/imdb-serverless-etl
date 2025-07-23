@@ -5,14 +5,6 @@ from botocore.exceptions import ClientError
 from lambdas.enrich_and_store_movies.src.s3_service import S3Service
 
 @pytest.fixture
-def mock_logger():
-    return MagicMock()
-
-@pytest.fixture
-def mock_s3_client():
-    return MagicMock()
-
-@pytest.fixture
 def s3_service(mock_s3_client, mock_logger):
     return S3Service(
         client=mock_s3_client,
