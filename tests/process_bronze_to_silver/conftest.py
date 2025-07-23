@@ -5,6 +5,7 @@ from moto import mock_aws
 from unittest.mock import patch
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 process_bronze_to_silver_path = os.path.join(os.path.dirname(__file__), '..', '..', 'lambdas', 'process_bronze_to_silver')
 process_bronze_to_silver_path = os.path.abspath(process_bronze_to_silver_path)
@@ -39,6 +40,13 @@ def s3_buckets(aws_credentials):
             'source_bucket': source_bucket,
             'target_bucket': target_bucket
         }
+
+@pytest.fixture
+def mock_s3_service():
+    mock_s3 = MagicMock()
+    mock_s3.list_json_objects.return_value = ["bronze/2025-07-23/file1.json"]
+    mock_s3.load_json.return_value = {"key": "value"}
+    return mock_s3
 
 @pytest.fixture
 def environment_variables(s3_buckets):
